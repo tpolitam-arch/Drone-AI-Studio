@@ -60,14 +60,70 @@ export default function ChatPage() {
     },
   });
 
-  // Get AI response mutation
+  // Streaming state
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  // Get AI response with streaming
   const getAIResponseMutation = useMutation({
     mutationFn: async (data: { chatId: number; userMessage: string; language: string; topic?: string }) => {
-      const response = await apiRequest("POST", `/api/chats/${data.chatId}/respond`, data);
-      return response.json();
+      setIsStreaming(true);
+      setStreamingMessage("");
+      
+      const response = await fetch(`/api/chats/${data.chatId}/respond`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'content') {
+                setStreamingMessage(data.content);
+              } else if (data.type === 'complete') {
+                setIsStreaming(false);
+                setStreamingMessage("");
+                queryClient.invalidateQueries({ queryKey: ["/api/chats", currentChatId, "messages"] });
+                return data.message;
+              } else if (data.type === 'error') {
+                setIsStreaming(false);
+                setStreamingMessage("");
+                throw new Error(data.message);
+              }
+            } catch (e) {
+              // Ignore malformed JSON
+            }
+          }
+        }
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chats", currentChatId, "messages"] });
+    onError: () => {
+      setIsStreaming(false);
+      setStreamingMessage("");
+      toast({
+        title: "Error",
+        description: "Failed to get AI response",
+        variant: "destructive",
+      });
     },
   });
 
@@ -174,7 +230,9 @@ export default function ChatPage() {
           messages={messages}
           currentChatId={currentChatId}
           isLoading={messagesLoading || sendMessageMutation.isPending}
-          isAIResponding={getAIResponseMutation.isPending}
+          isAIResponding={getAIResponseMutation.isPending || isStreaming}
+          streamingMessage={streamingMessage}
+          isStreaming={isStreaming}
           onSendMessage={handleSendMessage}
           onQuickTopic={handleQuickTopic}
         />

@@ -11,6 +11,8 @@ interface ChatInterfaceProps {
   currentChatId: number | null;
   isLoading: boolean;
   isAIResponding: boolean;
+  streamingMessage?: string;
+  isStreaming?: boolean;
   onSendMessage: (content: string, topic?: string) => void;
   onQuickTopic: (topic: string) => void;
 }
@@ -29,6 +31,8 @@ export default function ChatInterface({
   currentChatId, 
   isLoading, 
   isAIResponding,
+  streamingMessage = "",
+  isStreaming = false,
   onSendMessage, 
   onQuickTopic 
 }: ChatInterfaceProps) {
@@ -134,7 +138,24 @@ export default function ChatInterface({
               </div>
             ))}
             
-            {isAIResponding && (
+            {isStreaming && streamingMessage && (
+              <div className="flex justify-start">
+                <div className="max-w-3xl">
+                  <div className="bg-gray-100 text-dark-text rounded-2xl rounded-tl-md px-4 py-3 chat-bubble">
+                    <div className="flex items-center mb-2">
+                      <span className="text-primary mr-2">🤖</span>
+                      <span className="text-sm font-medium text-primary">Drone AI Assistant</span>
+                    </div>
+                    <div className="prose prose-sm max-w-none">
+                      <StreamingMessage content={streamingMessage} speed={0} />
+                      <span className="streaming-dot ml-1">●</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {isAIResponding && !isStreaming && (
               <div className="flex justify-start">
                 <div className="max-w-3xl">
                   <div className="bg-gray-100 text-dark-text rounded-2xl rounded-tl-md px-4 py-3 chat-bubble">

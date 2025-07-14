@@ -57,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI response endpoint
+  // AI response endpoint with streaming
   app.post("/api/chats/:id/respond", async (req, res) => {
     try {
       const chatId = parseInt(req.params.id);
@@ -67,10 +67,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid chat ID" });
       }
 
+      // Set up Server-Sent Events
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+      });
+
       // Generate AI response based on message content and language
       const aiResponse = generateAIResponse(userMessage, language, topic);
       
-      // Save AI response as message
+      // Stream the response word by word
+      const words = aiResponse.split(' ');
+      let streamedContent = '';
+      
+      for (let i = 0; i < words.length; i++) {
+        streamedContent += (i > 0 ? ' ' : '') + words[i];
+        
+        res.write(`data: ${JSON.stringify({
+          type: 'content',
+          content: streamedContent,
+          isComplete: i === words.length - 1
+        })}\n\n`);
+        
+        // Add delay to simulate streaming
+        await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100));
+      }
+      
+      // Save the complete AI response as message
       const message = await storage.createMessage({
         chatId,
         role: "assistant",
@@ -78,9 +104,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { language, topic }
       });
 
-      res.json(message);
+      // Send completion event with the saved message
+      res.write(`data: ${JSON.stringify({
+        type: 'complete',
+        message: message
+      })}\n\n`);
+      
+      res.end();
     } catch (error) {
-      res.status(500).json({ message: "Failed to generate response" });
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        message: 'Failed to generate response'
+      })}\n\n`);
+      res.end();
     }
   });
 

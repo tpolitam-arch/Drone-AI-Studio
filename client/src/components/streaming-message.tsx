@@ -10,7 +10,11 @@ export default function StreamingMessage({ content, speed = 30 }: StreamingMessa
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    if (currentIndex < content.length) {
+    if (speed === 0) {
+      // Instant display for real-time streaming
+      setDisplayedContent(content);
+      setCurrentIndex(content.length);
+    } else if (currentIndex < content.length) {
       const timer = setTimeout(() => {
         setDisplayedContent(content.substring(0, currentIndex + 1));
         setCurrentIndex(currentIndex + 1);
