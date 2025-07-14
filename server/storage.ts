@@ -54,7 +54,8 @@ export class MemStorage implements IStorage {
     const id = this.currentChatId++;
     const now = new Date();
     const chat: Chat = { 
-      ...insertChat, 
+      ...insertChat,
+      language: insertChat.language || "en",
       id,
       createdAt: now,
       updatedAt: now
@@ -89,7 +90,8 @@ export class MemStorage implements IStorage {
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
     const id = this.currentMessageId++;
     const message: Message = { 
-      ...insertMessage, 
+      ...insertMessage,
+      metadata: insertMessage.metadata || null,
       id,
       createdAt: new Date()
     };

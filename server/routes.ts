@@ -131,17 +131,17 @@ function generateAIResponse(userMessage: string, language: string, topic?: strin
   }
   
   if (lowerMessage.includes('assembly') || lowerMessage.includes('assemble')) {
-    return languageResponses.assembly || languageResponses.default;
+    return (languageResponses as any).assembly || languageResponses.default;
   } else if (lowerMessage.includes('component') || lowerMessage.includes('parts')) {
-    return languageResponses.components || languageResponses.default;
+    return (languageResponses as any).components || languageResponses.default;
   } else if (lowerMessage.includes('maintenance') || lowerMessage.includes('maintain')) {
-    return languageResponses.maintenance || languageResponses.default;
+    return (languageResponses as any).maintenance || languageResponses.default;
   } else if (lowerMessage.includes('dgca') || lowerMessage.includes('rules') || lowerMessage.includes('regulation')) {
-    return languageResponses.rules || languageResponses.default;
+    return (languageResponses as any).rules || languageResponses.default;
   } else if (lowerMessage.includes('simulation') || lowerMessage.includes('simscape')) {
-    return languageResponses.simulation || languageResponses.default;
+    return (languageResponses as any).simulation || languageResponses.default;
   } else if (lowerMessage.includes('agriculture') || lowerMessage.includes('delivery') || lowerMessage.includes('use case')) {
-    return languageResponses.usecases || languageResponses.default;
+    return (languageResponses as any).usecases || languageResponses.default;
   }
   
   return languageResponses.default;
