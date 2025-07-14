@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Send, Wrench, Cpu, Settings, Play, Gavel, Sprout } from "lucide-react";
 import { Message } from "@shared/schema";
 import StreamingMessage from "./streaming-message";
+import InteractionPanel from "./interaction-panel";
 import { cn } from "@/lib/utils";
 
 interface ChatInterfaceProps {
@@ -13,6 +14,7 @@ interface ChatInterfaceProps {
   isAIResponding: boolean;
   streamingMessage?: string;
   isStreaming?: boolean;
+  interactionMode?: 'text' | 'voice' | 'webcam' | 'screen';
   onSendMessage: (content: string, topic?: string) => void;
   onQuickTopic: (topic: string) => void;
 }
@@ -33,6 +35,7 @@ export default function ChatInterface({
   isAIResponding,
   streamingMessage = "",
   isStreaming = false,
+  interactionMode = 'text',
   onSendMessage, 
   onQuickTopic 
 }: ChatInterfaceProps) {
@@ -72,7 +75,19 @@ export default function ChatInterface({
     }
   };
 
+  const handleTranscription = (text: string) => {
+    setInputValue(text);
+    setCharCount(text.length);
+    // Auto-send voice transcriptions
+    if (interactionMode === 'voice' && text.trim()) {
+      onSendMessage(text.trim());
+      setInputValue("");
+      setCharCount(0);
+    }
+  };
+
   const showWelcome = !currentChatId || messages.length === 0;
+  const showInteractionPanel = interactionMode !== 'text';
 
   return (
     <main className="flex-1 flex flex-col bg-white">
@@ -97,6 +112,15 @@ export default function ChatInterface({
         </div>
       </div>
 
+      {/* Interaction Panel for Voice, Webcam, Screen Share */}
+      {showInteractionPanel && (
+        <InteractionPanel
+          interactionMode={interactionMode}
+          onTranscription={handleTranscription}
+          isActive={true}
+        />
+      )}
+
       {/* Chat Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {showWelcome ? (
@@ -109,6 +133,15 @@ export default function ChatInterface({
               Ask me anything about drones, from assembly and components to regulations and use cases. 
               I can respond in multiple Indian languages!
             </p>
+            {interactionMode !== 'text' && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  {interactionMode === 'voice' && "🎙️ Use voice commands to ask about drones"}
+                  {interactionMode === 'webcam' && "📹 Show your drone or parts via webcam for analysis"}
+                  {interactionMode === 'screen' && "🖥️ Share your screen to get help with drone software or simulations"}
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-6">

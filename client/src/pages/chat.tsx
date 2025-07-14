@@ -11,6 +11,8 @@ export default function ChatPage() {
   const [currentChatId, setCurrentChatId] = useState<number | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState("en");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isStreamingEnabled, setIsStreamingEnabled] = useState(true);
+  const [interactionMode, setInteractionMode] = useState<'text' | 'voice' | 'webcam' | 'screen'>('text');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -67,6 +69,12 @@ export default function ChatPage() {
   // Get AI response with streaming
   const getAIResponseMutation = useMutation({
     mutationFn: async (data: { chatId: number; userMessage: string; language: string; topic?: string }) => {
+      if (!isStreamingEnabled) {
+        // Use regular API call without streaming
+        const response = await apiRequest("POST", `/api/chats/${data.chatId}/respond-legacy`, data);
+        return response.json();
+      }
+
       setIsStreaming(true);
       setStreamingMessage("");
       console.log('Starting streaming request...');
@@ -209,6 +217,10 @@ export default function ChatPage() {
         currentLanguage={currentLanguage}
         onLanguageChange={setCurrentLanguage}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        isStreamingEnabled={isStreamingEnabled}
+        onStreamingToggle={setIsStreamingEnabled}
+        interactionMode={interactionMode}
+        onInteractionModeChange={setInteractionMode}
       />
       
       <div className="flex flex-1 pt-16">
@@ -237,6 +249,7 @@ export default function ChatPage() {
           isAIResponding={getAIResponseMutation.isPending || isStreaming}
           streamingMessage={streamingMessage}
           isStreaming={isStreaming}
+          interactionMode={interactionMode}
           onSendMessage={handleSendMessage}
           onQuickTopic={handleQuickTopic}
         />

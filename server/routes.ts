@@ -120,6 +120,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Legacy non-streaming response endpoint
+  app.post("/api/chats/:id/respond-legacy", async (req, res) => {
+    try {
+      const chatId = parseInt(req.params.id);
+      const { userMessage, language = "en", topic } = req.body;
+      
+      if (isNaN(chatId)) {
+        return res.status(400).json({ message: "Invalid chat ID" });
+      }
+
+      // Generate AI response based on message content and language
+      const aiResponse = generateAIResponse(userMessage, language, topic);
+      
+      // Save AI response as message
+      const message = await storage.createMessage({
+        chatId,
+        role: "assistant",
+        content: aiResponse,
+        metadata: { language, topic }
+      });
+
+      res.json(message);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to generate response" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

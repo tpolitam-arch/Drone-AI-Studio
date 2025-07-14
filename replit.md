@@ -111,4 +111,15 @@ Multi-language interface supporting:
 - Runtime error overlay for better debugging
 - Development banner injection for external access
 
+## Recent Changes
+
+### July 14, 2025
+- **Streaming Functionality**: Implemented real-time Server-Sent Events (SSE) streaming for AI responses, similar to Google AI Studio
+- **Multi-Modal Interaction**: Added three interaction modes beyond text:
+  - **Voice Input**: Speech recognition for hands-free drone queries
+  - **Webcam Integration**: Video capture for visual drone part analysis
+  - **Screen Sharing**: Display sharing for drone software/simulation assistance
+- **Streaming Toggle**: Added UI toggle to enable/disable streaming responses
+- **Enhanced Header**: Updated with interaction mode buttons and streaming controls
+
 The application follows a clean separation of concerns with shared TypeScript types between frontend and backend, comprehensive error handling, and a scalable architecture ready for additional features like real-time messaging or AI integration.
