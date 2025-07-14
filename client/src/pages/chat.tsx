@@ -69,6 +69,7 @@ export default function ChatPage() {
     mutationFn: async (data: { chatId: number; userMessage: string; language: string; topic?: string }) => {
       setIsStreaming(true);
       setStreamingMessage("");
+      console.log('Starting streaming request...');
       
       const response = await fetch(`/api/chats/${data.chatId}/respond`, {
         method: 'POST',
@@ -77,6 +78,8 @@ export default function ChatPage() {
         },
         body: JSON.stringify(data),
       });
+      
+      console.log('Response received:', response.status);
 
       if (!response.body) {
         throw new Error('No response body');
@@ -98,6 +101,7 @@ export default function ChatPage() {
               const data = JSON.parse(line.slice(6));
               
               if (data.type === 'content') {
+                console.log('Streaming content:', data.content);
                 setStreamingMessage(data.content);
               } else if (data.type === 'complete') {
                 setIsStreaming(false);
