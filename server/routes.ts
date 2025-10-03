@@ -4,12 +4,11 @@ import { storage } from "./storage";
 import { insertChatSchema, insertMessageSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Chat routes
   app.get("/api/chats", async (req, res) => {
     try {
       const chats = await storage.getChats();
       res.json(chats);
-    } catch (error) {
+    } catch {
       res.status(500).json({ message: "Failed to fetch chats" });
     }
   });
@@ -19,7 +18,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertChatSchema.parse(req.body);
       const chat = await storage.createChat(validatedData);
       res.json(chat);
-    } catch (error) {
+    } catch {
       res.status(400).json({ message: "Invalid chat data" });
     }
   });
@@ -27,13 +26,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/chats/:id/messages", async (req, res) => {
     try {
       const chatId = parseInt(req.params.id);
-      if (isNaN(chatId)) {
-        return res.status(400).json({ message: "Invalid chat ID" });
-      }
-      
+      if (isNaN(chatId)) return res.status(400).json({ message: "Invalid chat ID" });
+
       const messages = await storage.getMessagesByChatId(chatId);
       res.json(messages);
-    } catch (error) {
+    } catch {
       res.status(500).json({ message: "Failed to fetch messages" });
     }
   });
@@ -41,62 +38,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/chats/:id/messages", async (req, res) => {
     try {
       const chatId = parseInt(req.params.id);
-      if (isNaN(chatId)) {
-        return res.status(400).json({ message: "Invalid chat ID" });
-      }
+      if (isNaN(chatId)) return res.status(400).json({ message: "Invalid chat ID" });
 
-      const validatedData = insertMessageSchema.parse({
-        ...req.body,
-        chatId
-      });
-      
+      const validatedData = insertMessageSchema.parse({ ...req.body, chatId });
       const message = await storage.createMessage(validatedData);
       res.json(message);
-    } catch (error) {
+    } catch {
       res.status(400).json({ message: "Invalid message data" });
     }
   });
 
-  // AI response endpoint with streaming
   app.post("/api/chats/:id/respond", async (req, res) => {
     try {
       const chatId = parseInt(req.params.id);
       const { userMessage, language = "en", topic } = req.body;
-      
-      if (isNaN(chatId)) {
-        return res.status(400).json({ message: "Invalid chat ID" });
-      }
+      if (isNaN(chatId)) return res.status(400).json({ message: "Invalid chat ID" });
 
-      // Set up Server-Sent Events
       res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control'
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Cache-Control"
       });
 
-      // Generate AI response based on message content and language
       const aiResponse = generateAIResponse(userMessage, language, topic);
-      
-      // Stream the response word by word
-      const words = aiResponse.split(' ');
-      let streamedContent = '';
-      
+      const words = aiResponse.split(" ");
+      let streamedContent = "";
+
       for (let i = 0; i < words.length; i++) {
-        streamedContent += (i > 0 ? ' ' : '') + words[i];
-        
-        res.write(`data: ${JSON.stringify({
-          type: 'content',
-          content: streamedContent,
-          isComplete: i === words.length - 1
-        })}\n\n`);
-        
-        // Add delay to simulate streaming
+        streamedContent += (i > 0 ? " " : "") + words[i];
+        res.write(
+          `data: ${JSON.stringify({
+            type: "content",
+            content: streamedContent,
+            isComplete: i === words.length - 1
+          })}\n\n`
+        );
         await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100));
       }
-      
-      // Save the complete AI response as message
+
       const message = await storage.createMessage({
         chatId,
         role: "assistant",
@@ -104,36 +85,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { language, topic }
       });
 
-      // Send completion event with the saved message
-      res.write(`data: ${JSON.stringify({
-        type: 'complete',
-        message: message
-      })}\n\n`);
-      
+      res.write(
+        `data: ${JSON.stringify({
+          type: "complete",
+          message
+        })}\n\n`
+      );
       res.end();
-    } catch (error) {
-      res.write(`data: ${JSON.stringify({
-        type: 'error',
-        message: 'Failed to generate response'
-      })}\n\n`);
+    } catch {
+      res.write(`data: ${JSON.stringify({ type: "error", message: "Failed to generate response" })}\n\n`);
       res.end();
     }
   });
 
-  // Legacy non-streaming response endpoint
   app.post("/api/chats/:id/respond-legacy", async (req, res) => {
     try {
       const chatId = parseInt(req.params.id);
       const { userMessage, language = "en", topic } = req.body;
-      
-      if (isNaN(chatId)) {
-        return res.status(400).json({ message: "Invalid chat ID" });
-      }
+      if (isNaN(chatId)) return res.status(400).json({ message: "Invalid chat ID" });
 
-      // Generate AI response based on message content and language
       const aiResponse = generateAIResponse(userMessage, language, topic);
-      
-      // Save AI response as message
+
       const message = await storage.createMessage({
         chatId,
         role: "assistant",
@@ -142,7 +114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json(message);
-    } catch (error) {
+    } catch {
       res.status(500).json({ message: "Failed to generate response" });
     }
   });
@@ -151,61 +123,206 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
+// ---------- Multilingual AI Response Generator Function ----------
+
 function generateAIResponse(userMessage: string, language: string, topic?: string): string {
   const responses = {
     en: {
-      assembly: "To assemble a drone for the first time, follow these steps:\n\n1. **Prepare your workspace**: Choose a clean, well-lit area with sufficient space.\n\n2. **Gather tools**: You'll need screwdrivers, hex keys, and cable ties.\n\n3. **Frame assembly**: Start with the main frame and attach the arms securely.\n\n4. **Motor installation**: Mount motors to each arm, ensuring proper orientation.\n\n5. **ESC connection**: Connect Electronic Speed Controllers to motors and flight controller.\n\n6. **Flight controller**: Mount centrally and connect to receiver, GPS, and other components.\n\n7. **Propeller installation**: Attach propellers last, ensuring correct rotation direction.\n\n8. **Testing**: Perform pre-flight checks before maiden flight.",
-      components: "Essential drone components include:\n\n**Flight Controller**: The brain of your drone, processes sensor data and controls flight.\n\n**Motors**: Brushless motors provide thrust. Choose based on payload and frame size.\n\n**ESCs**: Electronic Speed Controllers regulate motor speed based on flight controller signals.\n\n**Propellers**: Generate thrust. Size and pitch affect performance and efficiency.\n\n**Battery**: LiPo batteries provide power. Consider capacity, voltage, and discharge rate.\n\n**Frame**: Provides structure. Materials include carbon fiber, aluminum, and plastic.\n\n**Sensors**: Gyroscope, accelerometer, magnetometer, and GPS for stable flight.\n\n**Camera/Gimbal**: For aerial photography and videography applications.",
-      maintenance: "Proper drone maintenance ensures longevity and safe operation:\n\n**Pre-flight checks**: Inspect propellers, battery connections, and frame integrity.\n\n**Battery care**: Store at proper voltage levels, avoid over-discharge, check for swelling.\n\n**Motor maintenance**: Clean debris, check for smooth rotation, replace worn bearings.\n\n**Calibration**: Regularly calibrate compass, accelerometer, and gimbal.\n\n**Firmware updates**: Keep flight controller firmware current for bug fixes and features.\n\n**Storage**: Store in dry environment, remove batteries for long-term storage.",
-      simulation: "Simscape provides powerful tools for drone simulation:\n\n**Multibody modeling**: Create accurate physical representations of drone components.\n\n**Control system design**: Test flight controllers before hardware implementation.\n\n**Environmental factors**: Simulate wind, turbulence, and payload variations.\n\n**Sensor modeling**: Include realistic sensor noise and delays.\n\n**Mission planning**: Test autonomous flight paths and obstacle avoidance.\n\n**Performance optimization**: Analyze efficiency and stability characteristics.",
-      rules: "DGCA (Directorate General of Civil Aviation) drone regulations in India:\n\n**Registration**: All drones must be registered on the Digital Sky platform.\n\n**Pilot license**: RPAS (Remotely Piloted Aircraft Systems) pilot license required for commercial operations.\n\n**No-fly zones**: Restricted around airports, military installations, and international borders.\n\n**Altitude limits**: Maximum 400 feet AGL (Above Ground Level) for civilian operations.\n\n**Visual line of sight**: Pilot must maintain visual contact with drone.\n\n**Insurance**: Third-party insurance mandatory for commercial operations.\n\n**Import regulations**: Type certificate required for drone imports.",
-      usecases: "Drone applications in agriculture and other sectors:\n\n**Precision Agriculture**: Crop monitoring, pest detection, and yield estimation using multispectral imaging.\n\n**Spraying Operations**: Targeted pesticide and fertilizer application with GPS guidance.\n\n**Livestock Monitoring**: Track animal health and movement patterns.\n\n**Delivery Services**: Last-mile delivery for medical supplies and e-commerce.\n\n**Surveillance**: Security monitoring, border patrol, and disaster response.\n\n**Infrastructure Inspection**: Power lines, pipelines, and building assessments.\n\n**Mapping and Surveying**: High-resolution aerial mapping and 3D modeling.",
-      default: "I'm your Drone AI Assistant! I can help you with drone assembly, components, maintenance, DGCA regulations in India, simulations, and various use cases like agriculture and delivery. What would you like to know?"
+      assembly: `To assemble a drone for the first time, follow these steps:
+
+1. **Prepare your workspace**: Choose a clean, well-lit area with sufficient space.
+2. **Gather tools**: You'll need screwdrivers, hex keys, and cable ties.
+3. **Frame assembly**: Start with the main frame and attach the arms securely.
+4. **Motor installation**: Mount motors to each arm, ensuring proper orientation.
+5. **ESC connection**: Connect Electronic Speed Controllers to motors and the flight controller.
+6. **Flight controller**: Mount centrally and connect to the receiver, GPS, and sensors.
+7. **Propeller installation**: Attach propellers last, ensuring correct rotation direction.
+8. **Testing**: Perform pre-flight checks and calibrations before flying.`,
+
+      components: `Essential drone components include:
+
+**Frame/Chassis**: Physical structure made of carbon fiber, plastic, or aluminum.
+**Motors**: Usually brushless DC motors (BLDC) for thrust.
+**Propellers**: Paired with motors to generate lift.
+**ESCs**: Control motor speed based on signals from the flight controller.
+**Battery**: Typically LiPo batteries for high energy density.
+**Power Distribution Board (PDB)**: Distributes power to all components.
+**Flight Controller (FC)**: The brain of the drone, stabilizes and navigates.
+**Sensors**: Includes IMU, barometer, magnetometer, and GPS.
+**Camera/Gimbal**: Optional for photography or surveillance.
+**Communication systems**: Includes radio transmitter/receiver, telemetry, FPV.`,
+
+      maintenance: `Drone maintenance tips:
+
+- **Pre-flight checks**: Examine frame, motor, and propellers for cracks or damage.
+- **Battery care**: Store LiPo batteries at 3.7–3.8V/cell, avoid overcharging or full discharging.
+- **Motor care**: Clean dust, check for unusual noises, lubricate if needed.
+- **Firmware updates**: Update flight controller firmware (e.g., ArduPilot, PX4).
+- **Sensor calibration**: Regularly calibrate compass, accelerometer, barometer, and GPS.`,
+
+      rules: `DGCA (India) Drone Regulations:
+
+- **Registration**: All drones must be registered on the Digital Sky Platform.
+- **License**: Remote Pilot License required for commercial drones.
+- **No-Fly Zones**: Near airports, borders, military areas.
+- **Altitude Limit**: 120 meters (400 feet) max for standard operations.
+- **Visual Line of Sight (VLOS)**: Mandatory.
+- **Geo-fencing & real-time tracking**: Required for mid and large-sized drones.
+- **Insurance**: Required for commercial drones.`,
+
+      simulation: `Drone Simulation with Simscape:
+
+- **Multibody Modeling**: Create physical models of drones.
+- **Sensor Simulation**: Model GPS, barometers, and magnetometers.
+- **Control Systems**: Design PID and feedback controllers.
+- **Environmental Conditions**: Simulate wind, gravity, terrain.
+- **Testing**: Test stability, fault handling, mission planning.`,
+
+      usecases: `Drone Use Cases:
+
+- **Agriculture**: Crop monitoring, pesticide spraying.
+- **Surveillance**: Border patrol, traffic monitoring.
+- **Delivery**: Last-mile parcel delivery.
+- **Infrastructure Inspection**: Power lines, bridges, pipelines.
+- **Emergency Response**: Search and rescue, fire monitoring.
+- **Mapping & Surveying**: Aerial data collection.`,
+
+      default: `I'm your Drone AI Assistant! I can help with drone assembly, components, maintenance, DGCA rules, simulation, and use cases. Ask me anything!`
     },
+
     hi: {
-      assembly: "पहली बार ड्रोन असेंबली के लिए इन चरणों का पालन करें:\n\n1. **कार्यस्थल तैयार करें**: एक साफ, अच्छी रोशनी वाला क्षेत्र चुनें।\n\n2. **उपकरण इकट्ठे करें**: स्क्रूड्राइवर, हेक्स की, और केबल टाई की आवश्यकता होगी।\n\n3. **फ्रेम असेंबली**: मुख्य फ्रेम से शुरू करें और आर्म्स को सुरक्षित रूप से जोड़ें।\n\n4. **मोटर इंस्टॉलेशन**: प्रत्येक आर्म पर मोटर माउंट करें।\n\n5. **ESC कनेक्शन**: इलेक्ट्रॉनिक स्पीड कंट्रोलर्स को मोटर्स और फ्लाइट कंट्रोलर से जोड़ें।\n\nक्या आपको किसी विशिष्ट चरण के बारे में और जानकारी चाहिए?",
-      default: "मैं आपका ड्रोन AI असिस्टेंट हूं! मैं ड्रोन असेंबली, घटकों, रखरखाव, भारत में DGCA नियमों आदि में आपकी मदद कर सकता हूं।"
+      assembly: `पहली बार ड्रोन असेंबली के लिए इन चरणों का पालन करें:
+
+1. कार्यस्थल तैयार करें – साफ और रोशनी वाला स्थान चुनें।
+2. उपकरण एकत्र करें – स्क्रूड्राइवर, हेक्स की, केबल टाई।
+3. फ्रेम असेंबली – मुख्य फ्रेम पर बाहें जोड़ें।
+4. मोटर लगाएं – सही दिशा में हर बाहु पर।
+5. ESC को जोड़ें – मोटर और फ्लाइट कंट्रोलर से।
+6. फ्लाइट कंट्रोलर लगाएं – रिसीवर और सेंसर से कनेक्ट करें।
+7. प्रोपेलर लगाएं – सही दिशा में लगाना जरूरी है।
+8. टेस्टिंग करें – उड़ान से पहले पूरी जांच करें।`,
+
+      components: `ड्रोन के आवश्यक घटक:
+
+- **फ्रेम**: कार्बन फाइबर या एल्युमिनियम से बना होता है।
+- **मोटर**: ब्रशलेस डीसी मोटर अधिक उपयुक्त होती है।
+- **प्रोपेलर**: लिफ्ट प्रदान करते हैं।
+- **ESC**: मोटर की गति को नियंत्रित करता है।
+- **बैटरी**: सामान्यतः LiPo बैटरी होती है।
+- **पावर डिस्ट्रीब्यूशन बोर्ड (PDB)**: सभी कंपोनेंट्स को बिजली देता है।
+- **फ्लाइट कंट्रोलर**: ड्रोन का मस्तिष्क होता है।
+- **सेंसर**: IMU, GPS, बैरोमीटर आदि।
+- **कैमरा और गिंबल**: निगरानी या फोटो के लिए।
+- **कम्युनिकेशन सिस्टम**: रेडियो, टेलीमेट्री, FPV।`,
+
+      maintenance: `ड्रोन मेंटेनेंस के सुझाव:
+
+- उड़ान से पहले जांच करें।
+- बैटरी को सही वोल्टेज पर स्टोर करें।
+- मोटर की सफाई और जांच करें।
+- सॉफ़्टवेयर अपडेट और सेंसर कैलिब्रेशन करें।`,
+
+      rules: `DGCA के नियम:
+
+- रजिस्ट्रेशन अनिवार्य है।
+- कमर्शियल उड़ानों के लिए लाइसेंस आवश्यक है।
+- हवाई अड्डों के पास उड़ान वर्जित है।
+- अधिकतम ऊंचाई 120 मीटर।
+- दृश्यमान उड़ान (VLOS) जरूरी है।
+- कमर्शियल ड्रोन के लिए बीमा जरूरी है।`,
+
+      simulation: `Simscape के साथ ड्रोन सिमुलेशन:
+
+- फिजिकल मॉडलिंग करें।
+- सेंसर डेटा सिमुलेट करें।
+- कंट्रोल डिजाइन करें।
+- टेस्टिंग और मिशन प्लानिंग करें।`,
+
+      usecases: `ड्रोन के उपयोग:
+
+- कृषि – छिड़काव और निगरानी।
+- डिलीवरी – पार्सल डिलीवरी।
+- सर्वेक्षण – मानचित्रण और डेटा संग्रह।
+- सुरक्षा – निगरानी और गश्त।
+- आपदा प्रबंधन – खोज और बचाव।`,
+
+      default: `मैं आपका ड्रोन AI सहायक हूं। ड्रोन असेंबली, नियम, और उपयोग मामलों में आपकी मदद कर सकता हूं।`
     },
+
     te: {
-      default: "నేను మీ డ్రోన్ AI అసిస్టెంట్! డ్రోన్ అసెంబ్లీ, భాగాలు, నిర్వహణ, భారతదేశంలో DGCA నిబంధనలు మొదలైన వాటిలో నేను మీకు సహాయం చేయగలను।"
-    },
-    ta: {
-      default: "நான் உங்கள் ட்ரோன் AI உதவியாளர்! ட்ரோன் அசெம்ப்ளி, கூறுகள், பராமரிப்பு, இந்தியாவில் DGCA விதிமுறைகள் போன்றவற்றில் உங்களுக்கு உதவ முடியும்."
-    },
-    kn: {
-      default: "ನಾನು ನಿಮ್ಮ ಡ್ರೋನ್ AI ಸಹಾಯಕ! ಡ್ರೋನ್ ಅಸೆಂಬ್ಲಿ, ಘಟಕಗಳು, ನಿರ್ವಹಣೆ, ಭಾರತದಲ್ಲಿ DGCA ನಿಯಮಗಳು ಇತ್ಯಾದಿಗಳಲ್ಲಿ ನಾನು ನಿಮಗೆ ಸಹಾಯ ಮಾಡಬಲ್ಲೆ."
-    },
-    ml: {
-      default: "ഞാൻ നിങ്ങളുടെ ഡ്രോൺ AI അസിസ്റ്റന്റ് ആണ്! ഡ്രോൺ അസംബ്ലി, ഘടകങ്ങൾ, പരിപാലനം, ഇന്ത്യയിലെ DGCA നിയമങ്ങൾ തുടങ്ങിയവയിൽ എനിക്ക് നിങ്ങളെ സഹായിക്കാൻ കഴിയും."
-    },
-    bn: {
-      default: "আমি আপনার ড্রোন AI সহায়ক! ড্রোন অ্যাসেম্বলি, উপাদান, রক্ষণাবেক্ষণ, ভারতে DGCA নিয়মাবলী ইত্যাদিতে আমি আপনাকে সাহায্য করতে পারি।"
-    },
-    mr: {
-      default: "मी तुमचा ड्रोन AI सहाय्यक आहे! ड्रोन असेंब्ली, घटक, देखभाल, भारतातील DGCA नियम इत्यादींमध्ये मी तुम्हाला मदत करू शकतो।"
+      assembly: `డ్రోన్ అసెంబ్లీ చేసే విధానం:
+
+1. పని స్థలం సిద్ధం చేయండి.
+2. అవసరమైన టూల్స్ సిద్ధం చేసుకోండి.
+3. ఫ్రేమ్‌ను జోడించండి.
+4. ప్రతి ఆర్మ్ పై మోటార్లు అమర్చండి.
+5. ESCలను మోటార్లకు కనెక్ట్ చేయండి.
+6. ఫ్లైట్ కంట్రోలర్‌ను అమర్చి, సెంసర్లు కలపండి.
+7. ప్రొపెల్లర్లను చివర్లో అమర్చండి – దిశను పరిశీలించండి.
+8. ముందస్తు టెస్ట్‌లు నిర్వహించండి.`,
+
+      components: `డ్రోన్ ముఖ్య భాగాలు:
+
+- **ఫ్రేమ్** – కార్బన్ ఫైబర్ లేదా అల్యూమినియం తో తయారు.
+- **మోటార్లు** – BLDC మోటార్లు ఎక్కువగా ఉపయోగిస్తారు.
+- **ప్రొపెల్లర్లు** – లిఫ్ట్ కోసం.
+- **ESCలు** – మోటార్ స్పీడ్ నియంత్రణ.
+- **బ్యాటరీ** – LiPo బ్యాటరీ ఎక్కువగా ఉపయోగించబడుతుంది.
+- **పవర్ డిస్ట్రిబ్యూషన్ బోర్డు** – విద్యుత్ పంపిణీ కోసం.
+- **ఫ్లైట్ కంట్రోలర్** – డ్రోన్ బ్రెయిన్.
+- **సెన్సర్లు** – IMU, GPS, మాగ్నెటోమీటర్.
+- **కెమేరా/గింబల్** – వీడియో కోసం.
+- **కమ్యూనికేషన్ సిస్టమ్** – రేడియో, టెలీమెట్రీ, FPV.`,
+
+      maintenance: `మెయింటెనెన్స్ సూచనలు:
+
+- ప్రతి ఫ్లైట్ ముందు దృఢత తనిఖీ చేయండి.
+- బ్యాటరీ సురక్షితంగా నిల్వ చేయండి.
+- మోటార్లు శుభ్రంగా ఉంచండి.
+- సెన్సర్ క్యాలిబ్రేషన్ తప్పనిసరి.`,
+
+      rules: `DGCA నియమాలు:
+
+- Digital Sky ద్వారా రిజిస్ట్రేషన్ తప్పనిసరి.
+- వాణిజ్య ప్రయాణాల కోసం లైసెన్స్ అవసరం.
+- ఎయిర్‌పోర్ట్స్ పక్కన ఫ్లైట్ నిషేధం.
+- గరిష్ట ఎత్తు: 120 మీటర్లు.
+- వాస్తవ దృశ్య పరిధి అవసరం.
+- బీమా వాణిజ్య డ్రోన్లకు అవసరం.`,
+
+      simulation: `Simscape తో సిమ్యులేషన్:
+
+- డ్రోన్ మల్టీబాడీ మోడలింగ్ చేయవచ్చు.
+- సెన్సర్ ఇన్‌పుట్‌లు సిమ్యులేట్ చేయండి.
+- PID కంట్రోల్ ట్యూనింగ్ చేయండి.
+- పర్యావరణ పరిస్థితులు సెట్ చేయవచ్చు.`,
+
+      usecases: `డ్రోన్ల వాడకాలు:
+
+- వ్యవసాయం – పంట పర్యవేక్షణ.
+- డెలివరీ – చిన్న పార్సిల్ పంపిణీ.
+- మ్యాపింగ్ – సర్వేలు, డేటా సేకరణ.
+- భద్రత – గస్తీ, పర్యవేక్షణ.
+- అత్యవసర స్పందన – రిస్క్యూ, ఫైర్ ట్రాకింగ్.`,
+
+      default: `నేను మీ డ్రోన్ AI సహాయకుడిని. డ్రోన్ భాగాలు, రూల్స్, అసెంబ్లీ గురించి అడగండి!`
     }
   };
 
   const languageResponses = responses[language as keyof typeof responses] || responses.en;
   const lowerMessage = userMessage.toLowerCase();
-  
-  if (topic) {
-    return languageResponses[topic as keyof typeof languageResponses] || languageResponses.default;
-  }
-  
-  if (lowerMessage.includes('assembly') || lowerMessage.includes('assemble')) {
-    return (languageResponses as any).assembly || languageResponses.default;
-  } else if (lowerMessage.includes('component') || lowerMessage.includes('parts')) {
-    return (languageResponses as any).components || languageResponses.default;
-  } else if (lowerMessage.includes('maintenance') || lowerMessage.includes('maintain')) {
-    return (languageResponses as any).maintenance || languageResponses.default;
-  } else if (lowerMessage.includes('dgca') || lowerMessage.includes('rules') || lowerMessage.includes('regulation')) {
-    return (languageResponses as any).rules || languageResponses.default;
-  } else if (lowerMessage.includes('simulation') || lowerMessage.includes('simscape')) {
-    return (languageResponses as any).simulation || languageResponses.default;
-  } else if (lowerMessage.includes('agriculture') || lowerMessage.includes('delivery') || lowerMessage.includes('use case')) {
-    return (languageResponses as any).usecases || languageResponses.default;
-  }
-  
-  return languageResponses.default;
+
+  const inferTopic = (): keyof typeof responses.en => {
+    if (topic) return topic as keyof typeof responses.en;
+    if (lowerMessage.includes("assembly")) return "assembly";
+    if (lowerMessage.includes("component") || lowerMessage.includes("parts")) return "components";
+    if (lowerMessage.includes("maintain") || lowerMessage.includes("maintenance")) return "maintenance";
+    if (lowerMessage.includes("dgca") || lowerMessage.includes("rule")) return "rules";
+    if (lowerMessage.includes("simulate") || lowerMessage.includes("simulation") || lowerMessage.includes("simscape")) return "simulation";
+    if (lowerMessage.includes("use case") || lowerMessage.includes("agriculture") || lowerMessage.includes("delivery")) return "usecases";
+    return "default";
+  };
+
+  const selectedTopic = inferTopic();
+  return languageResponses[selectedTopic] || languageResponses.default;
 }
