@@ -238,4 +238,4 @@ For issues and questions:
 
 ---
 
-**Drone AI Studio** - Empowering drone enthusiasts with AI-powered assistance in multiple languages.
+**Drone AI Studio** - Empowering drone enthusiasts with AI-powered assistance in multiple languages."# UAV-PM-" 
